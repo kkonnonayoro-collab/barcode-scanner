@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>バーコード＋ロゴ中央配置</title>
+<style>
+body { background-color: #4c4c4c;font-family: sans-serif; margin:0; padding:0; display:flex; flex-direction:column; align-items:center; }
+#video { width: 100%; max-width: 400px; border:1px solid #4c4c4c; margin-top:20px;border: none; }
+#modal { 
+    position: fixed; top:0; left:0; width:100%; height:100%; background: #4c4c4c; 
+    display:flex; justify-content:center; align-items:center; color:white; font-size:1.2em; text-align:center; padding:20px;
+}
+#modal button { margin-top:20px; padding:10px 20px; font-size:1em; }
+</style>
+</head>
+<body>
+
+<div id="modal">
+  <div>
+    <p>カメラでバーコードをスキャンしてください<br>※CODE128形式対応</p>
+    <button id="startBtn">スキャン開始</button>
+  </div>
+</div>
+
+<video id="video" autoplay muted playsinline></video>
+<canvas id="canvas" width="400" height="250" style="display:none"></canvas>
+
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<script>
+const startBtn = document.getElementById('startBtn');
+const modal = document.getElementById('modal');
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let codeReader = new ZXing.BrowserBarcodeReader();
+
+startBtn.addEventListener('click', async () => {
+    modal.style.display = 'none';
+    try {
+        const devices = await codeReader.listVideoInputDevices();
+        if(devices.length === 0) throw "カメラが見つかりません";
+        const selectedDeviceId = devices[0].deviceId;
+        codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
+            if(result) handleResult(result.text);
+            if(err) console.warn(err);
+        });
+    } catch (err) {
+        alert('カメラ起動エラー: ' + err);
+    }
+});
+
+function handleResult(text) {
+    // CODE128ならすべて通す
+    if(!text || text.length < 1) {
+        alert("バーコード無効: " + text);
+        return;
+    }
+
+    codeReader.reset();
+
+    // 背景白にする
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const logo = new Image();
+    logo.src = 'logo.png';
+    logo.onload = () => {
+        // ロゴ中央配置
+        const logoWidth = 200;
+        const logoHeight = 50;
+        const logoX = (canvas.width - logoWidth)/2;
+        const logoY = 20;
+        ctx.drawImage(logo, logoX, logoY, logoWidth, logoHeight);
+
+        // バーコード生成用 canvas
+        const bcCanvas = document.createElement('canvas');
+        bcCanvas.width = 300;
+        bcCanvas.height = 100;
+        JsBarcode(bcCanvas, text, {
+            format:"CODE128",
+            displayValue:true,
+            width:2,
+            height:60,
+            margin:0,
+            fontSize:14
+        });
+
+        // バーコード中央配置
+        const bcX = (canvas.width - bcCanvas.width)/2;
+        const bcY = logoY + logoHeight + 20; // ロゴ下に余白20px
+        ctx.drawImage(bcCanvas, bcX, bcY);
+
+        // ダウンロード
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL("image/png");
+        link.download = `${text}.png`;
+        link.click();
+
+        alert("画像をダウンロードしました: " + text);
+        modal.style.display = 'flex';
+    };
+    logo.onerror = () => alert("logo.pngが読み込めません");
+}
+</script>
+</body>
+</html>
